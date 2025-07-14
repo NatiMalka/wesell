@@ -8,6 +8,27 @@ export interface User {
   createdAt: Date;
 }
 
+export interface UserPreferences {
+  id: string; // Same as user ID
+  userId: string;
+  // Report preferences
+  reportViewType: 'monthly' | 'yearly';
+  selectedYear: number;
+  // Client management preferences
+  clientSearchTerm: string;
+  clientStatusFilter: 'all' | 'purchased' | 'considering' | 'potential' | 'cancelled';
+  // UI preferences
+  lastActiveTab: string;
+  // Notification preferences
+  notificationEnabled: boolean;
+  emailNotifications: boolean;
+  // Display preferences
+  dashboardLayout: 'compact' | 'detailed';
+  // System
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -39,6 +60,21 @@ export interface MonthlyStats {
   nextTierThreshold: number;
   nextTierBonus: number;
   progressPercentage: number;
+}
+
+export interface MonthlyData {
+  month: string;
+  year: number;
+  totalSales: number;
+  clientCount: number;
+  clients: Client[];
+}
+
+export interface YearlyData {
+  year: number;
+  totalSales: number;
+  clientCount: number;
+  months: MonthlyData[];
 }
 
 export interface Team {

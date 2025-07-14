@@ -1,11 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { DivideIcon as LucideIcon } from 'lucide-react';
+import { DivideIcon } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
   value: string | number;
-  icon: LucideIcon;
+  icon: React.ComponentType<any>;
   color?: 'primary' | 'success' | 'warning' | 'danger';
   trend?: {
     value: number;

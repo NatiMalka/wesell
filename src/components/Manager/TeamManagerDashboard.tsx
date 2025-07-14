@@ -16,13 +16,15 @@ import { User } from '../../types';
 import { useTeamManagement } from '../../hooks/useTeamManagement';
 import { StatCard } from '../UI/StatCard';
 import { ProgressBar } from '../UI/ProgressBar';
+import { TeamLeaderboard } from '../Agent/TeamLeaderboard';
 import { formatCurrency, getCurrentBonusTier } from '../../utils/calculations';
 
 interface TeamManagerDashboardProps {
   user: User;
+  onTabChange?: (tab: string) => void;
 }
 
-export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user }) => {
+export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user, onTabChange }) => {
   const {
     teamMembers,
     teamClients,
@@ -36,16 +38,16 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
     return (
       <div className="flex items-center justify-center min-h-64">
         <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full"
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          className="w-6 h-6 bg-purple-600 rounded-full"
         />
       </div>
     );
   }
 
   const teamOverview = getTeamOverview();
-  const unreadNotifications = notifications.filter(n => !n.read).length;
+  const unreadNotifications = notifications.filter(n => !n.readBy.includes(user.id)).length;
 
   return (
     <div className="space-y-6">
@@ -71,6 +73,8 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
           </div>
         </div>
       </motion.div>
+
+
 
       {/* Team Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -167,6 +171,21 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
         </div>
       </motion.div>
 
+      {/* Team Leaderboard */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="card"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">לוח התוצאות של הצוות</h2>
+          <Trophy className="w-5 h-5 text-yellow-500" />
+        </div>
+        
+        <TeamLeaderboard currentUserId={user.id} teamId={user.teamId || ''} />
+      </motion.div>
+
       {/* Recent Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div
@@ -190,7 +209,7 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
                     : notification.type === 'milestone'
                     ? 'bg-blue-50 border-blue-400'
                     : 'bg-yellow-50 border-yellow-400'
-                } ${!notification.read ? 'shadow-sm' : 'opacity-75'}`}
+                } ${!notification.readBy.includes(user.id) ? 'shadow-sm' : 'opacity-75'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center">
@@ -236,6 +255,7 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('agent-management')}
               className="w-full flex items-center justify-center p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
             >
               <Users className="w-5 h-5 ml-2" />
@@ -245,6 +265,7 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('my-goals')}
               className="w-full flex items-center justify-center p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
             >
               <Target className="w-5 h-5 ml-2" />
@@ -254,6 +275,7 @@ export const TeamManagerDashboard: React.FC<TeamManagerDashboardProps> = ({ user
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('team-reports')}
               className="w-full flex items-center justify-center p-3 bg-success-50 text-success-700 rounded-lg hover:bg-success-100 transition-colors"
             >
               <Calendar className="w-5 h-5 ml-2" />

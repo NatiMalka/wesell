@@ -75,7 +75,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ user }) 
         </div>
         <div className="flex items-center space-x-4">
           <span className="text-sm text-gray-500">
-            {notifications.filter(n => !n.read).length} לא נקראו
+            {notifications.filter(n => !n.readBy.includes(user.id)).length} לא נקראו
           </span>
         </div>
       </div>
@@ -88,7 +88,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ user }) 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={`card ${getNotificationColor(notification.type)} ${
-              !notification.read ? 'border-l-4 border-l-purple-500' : ''
+              !notification.readBy.includes(user.id) ? 'border-l-4 border-l-purple-500' : ''
             }`}
           >
             <div className="flex items-start justify-between">
@@ -124,7 +124,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ user }) 
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                {!notification.read && (
+                {!notification.readBy.includes(user.id) && (
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}

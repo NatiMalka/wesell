@@ -10,32 +10,26 @@ import {
   Filter,
   FileSpreadsheet
 } from 'lucide-react';
-import { Client, PLAN_NAMES } from '../../types';
+import { Client, PLAN_NAMES, MonthlyData, YearlyData, User } from '../../types';
 import { formatCurrency } from '../../utils/calculations';
 import { StatCard } from '../UI/StatCard';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 
 interface ReportsProps {
   clients: Client[];
+  user: User;
 }
 
-interface MonthlyData {
-  month: string;
-  year: number;
-  totalSales: number;
-  clientCount: number;
-  clients: Client[];
-}
-
-interface YearlyData {
-  year: number;
-  totalSales: number;
-  clientCount: number;
-  months: MonthlyData[];
-}
-
-export const Reports: React.FC<ReportsProps> = ({ clients }) => {
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [viewType, setViewType] = useState<'monthly' | 'yearly'>('monthly');
+export const Reports: React.FC<ReportsProps> = ({ clients, user }) => {
+  const { 
+    preferences, 
+    setReportViewType, 
+    setSelectedYear 
+  } = useUserPreferences(user.id);
+  
+  // Get values from preferences or defaults
+  const selectedYear = preferences?.selectedYear || new Date().getFullYear();
+  const viewType = preferences?.reportViewType || 'monthly';
 
   const purchasedClients = clients.filter(client => client.status === 'purchased');
 
@@ -114,6 +108,34 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
 
   const exportToExcel = () => {
     const data = viewType === 'monthly' ? currentYearMonthly : yearlyData;
+    
+    // Debug: Log the data to understand what's being exported
+    console.log('Export data:', data);
+    console.log('View type:', viewType);
+    console.log('Selected year:', selectedYear);
+    console.log('Purchased clients:', purchasedClients);
+    
+    // If no data, create a row indicating no data
+    if (data.length === 0) {
+      const csvContent = [
+        // Headers
+        viewType === 'monthly' 
+          ? ['חודש', 'שנה', 'סה"כ מכירות', 'מספר לקוחות']
+          : ['שנה', 'סה"כ מכירות', 'מספר לקוחות'],
+        // No data row
+        viewType === 'monthly' 
+          ? ['אין נתונים', selectedYear, 0, 0]
+          : ['אין נתונים', 0, 0]
+      ].map(row => row.join(',')).join('\n');
+      
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `דוח_מכירות_${viewType === 'monthly' ? selectedYear : 'שנתי'}.csv`;
+      link.click();
+      return;
+    }
+
     const csvContent = [
       // Headers
       viewType === 'monthly' 
@@ -122,7 +144,7 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
       // Data rows
       ...data.map(item => 
         viewType === 'monthly' 
-          ? [item.month, item.year, item.totalSales, item.clientCount]
+          ? [(item as MonthlyData).month, item.year, item.totalSales, item.clientCount]
           : [item.year, item.totalSales, item.clientCount]
       )
     ].map(row => row.join(',')).join('\n');
@@ -131,6 +153,32 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `דוח_מכירות_${viewType === 'monthly' ? selectedYear : 'שנתי'}.csv`;
+    link.click();
+  };
+
+  const exportClientsToExcel = () => {
+    const purchasedClients = clients.filter(client => client.status === 'purchased');
+    const totalSalesAmount = purchasedClients.reduce((sum, client) => sum + client.price, 0);
+    
+    const csvContent = [
+      // Headers - RTL order for Hebrew language support
+      ['תאריך', 'שם', 'טלפון', 'תוכנית', 'סכום', 'הערות', 'סה״כ מכירות'],
+      // Data rows
+      ...purchasedClients.map(client => [
+        new Date(client.purchaseDate).toLocaleDateString('he-IL'),
+        client.name,
+        client.phone,
+        PLAN_NAMES[client.plan],
+        client.price,
+        client.notes || '',
+        totalSalesAmount
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `רשימת_לקוחות_${new Date().toLocaleDateString('he-IL').replace(/\//g, '_')}.csv`;
     link.click();
   };
 
@@ -167,7 +215,7 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
               <Filter className="w-4 h-4 text-gray-500" />
               <select 
                 value={viewType} 
-                onChange={(e) => setViewType(e.target.value as 'monthly' | 'yearly')}
+                onChange={(e) => setReportViewType(e.target.value as 'monthly' | 'yearly')}
                 className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="monthly">תצוגה חודשית</option>
@@ -191,15 +239,27 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
             )}
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={exportToExcel}
-            className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 rounded-lg hover:bg-success-700 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            ייצא לאקסל
-          </motion.button>
+          <div className="flex gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={exportToExcel}
+              className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 rounded-lg hover:bg-success-700 transition-colors"
+            >
+              <BarChart3 className="w-4 h-4" />
+              ייצא דוח סיכום
+            </motion.button>
+            
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={exportClientsToExcel}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              ייצא רשימת לקוחות
+            </motion.button>
+          </div>
         </div>
 
         {/* Summary Stats */}
@@ -266,14 +326,14 @@ export const Reports: React.FC<ReportsProps> = ({ clients }) => {
             <tbody>
               {(viewType === 'monthly' ? currentYearMonthly : yearlyData).map((item, index) => (
                 <motion.tr
-                  key={viewType === 'monthly' ? `${item.year}-${item.month}` : item.year}
+                  key={viewType === 'monthly' ? `${item.year}-${(item as MonthlyData).month}` : item.year}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                   className="border-b border-gray-200 hover:bg-gray-50"
                 >
                   <td className="px-4 py-3 text-sm text-gray-900">
-                    {viewType === 'monthly' ? `${item.month} ${item.year}` : item.year}
+                    {viewType === 'monthly' ? `${(item as MonthlyData).month} ${item.year}` : item.year}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {item.clientCount}

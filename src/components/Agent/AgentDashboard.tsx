@@ -1,19 +1,38 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, Users, Target, Award, Calendar, Phone } from 'lucide-react';
 import { StatCard } from '../UI/StatCard';
 import { ProgressBar } from '../UI/ProgressBar';
+import { TeamLeaderboard } from './TeamLeaderboard';
 import { User, Client } from '../../types';
 import { calculateMonthlyStats, formatCurrency, getCurrentBonusTier } from '../../utils/calculations';
+import { useTeamSalesSync } from '../../hooks/useTeamSalesSync';
 
 interface AgentDashboardProps {
   user: User;
   clients: Client[];
+  onTabChange?: (tab: string) => void;
 }
 
-export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients }) => {
+export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients, onTabChange }) => {
   const stats = calculateMonthlyStats(clients);
   const currentTier = getCurrentBonusTier(stats.totalSales);
+  
+  // Initialize team sales sync (only if user has teamId)
+  const { initializeTeamSales, cleanupDuplicates } = useTeamSalesSync(user.id, user.teamId || '');
+  
+  // Initialize team sales structure only once per session
+  useEffect(() => {
+    if (user.teamId) {
+      const initializeTeam = async () => {
+        // Small delay to prevent multiple simultaneous calls
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await cleanupDuplicates();
+        await initializeTeamSales();
+      };
+      initializeTeam();
+    }
+  }, [user.teamId]); // Remove dependencies to prevent re-running
   
   const recentClients = clients
     .filter(client => client.status === 'purchased')
@@ -105,6 +124,20 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients })
         </div>
       </motion.div>
 
+      {/* Team Leaderboard */}
+      {user.teamId && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <TeamLeaderboard
+            currentUserId={user.id}
+            teamId={user.teamId}
+          />
+        </motion.div>
+      )}
+
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Sales */}
@@ -162,6 +195,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients })
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('clients')}
               className="w-full flex items-center justify-center p-3 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
             >
               <Users className="w-5 h-5 ml-2" />
@@ -171,6 +205,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients })
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('clients')}
               className="w-full flex items-center justify-center p-3 bg-success-50 text-success-700 rounded-lg hover:bg-success-100 transition-colors"
             >
               <Phone className="w-5 h-5 ml-2" />
@@ -180,6 +215,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ user, clients })
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => onTabChange?.('goals')}
               className="w-full flex items-center justify-center p-3 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors"
             >
               <Target className="w-5 h-5 ml-2" />

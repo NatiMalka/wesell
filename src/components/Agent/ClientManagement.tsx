@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit, Trash2, Phone, Calendar, Filter } from 'lucide-react';
 import { Modal } from '../UI/Modal';
-import { Client, PlanType, ClientStatus, PLAN_NAMES, PLAN_PRICES } from '../../types';
+import { ConfirmModal } from '../UI/ConfirmModal';
+import { Client, PlanType, ClientStatus, PLAN_NAMES, PLAN_PRICES, User } from '../../types';
 import { formatCurrency } from '../../utils/calculations';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 
 interface ClientManagementProps {
   clients: Client[];
+  user: User;
   onAddClient: (client: Omit<Client, 'id' | 'agentId' | 'createdAt' | 'updatedAt'>) => Promise<Client>;
   onUpdateClient: (id: string, updates: Partial<Client>) => Promise<void>;
   onDeleteClient: (id: string) => Promise<void>;
@@ -14,14 +17,29 @@ interface ClientManagementProps {
 
 export const ClientManagement: React.FC<ClientManagementProps> = ({
   clients,
+  user,
   onAddClient,
   onUpdateClient,
   onDeleteClient,
 }) => {
+  const { 
+    preferences, 
+    setClientSearchTerm, 
+    setClientStatusFilter 
+  } = useUserPreferences(user.id);
+  
+  // Get values from preferences or defaults
+  const searchTerm = preferences?.clientSearchTerm || '';
+  const statusFilter = preferences?.clientStatusFilter || 'all';
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all');
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    clientId: '',
+    clientName: '',
+    isDeleting: false
+  });
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -79,10 +97,46 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('האם אתה בטוח שברצונך למחוק את הלקוח?')) {
-      await onDeleteClient(id);
+  const handleDeleteClick = (id: string) => {
+    const client = clients.find(c => c.id === id);
+    const clientName = client?.name || 'Unknown Client';
+    
+    setConfirmModal({
+      isOpen: true,
+      clientId: id,
+      clientName,
+      isDeleting: false
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmModal.clientId) return;
+    
+    setConfirmModal(prev => ({ ...prev, isDeleting: true }));
+    
+    try {
+      await onDeleteClient(confirmModal.clientId);
+      
+      // Close modal
+      setConfirmModal({
+        isOpen: false,
+        clientId: '',
+        clientName: '',
+        isDeleting: false
+      });
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      setConfirmModal(prev => ({ ...prev, isDeleting: false }));
     }
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmModal({
+      isOpen: false,
+      clientId: '',
+      clientName: '',
+      isDeleting: false
+    });
   };
 
   const getStatusColor = (status: ClientStatus) => {
@@ -131,7 +185,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({
               type="text"
               placeholder="חפש לקוח..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => setClientSearchTerm(e.target.value)}
               className="input-field pr-10"
             />
           </div>
@@ -141,7 +195,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({
             <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as ClientStatus | 'all')}
+              onChange={(e) => setClientStatusFilter(e.target.value as ClientStatus | 'all')}
               className="input-field pr-10 appearance-none"
             >
               <option value="all">כל הסטטוסים</option>
@@ -219,7 +273,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => handleDelete(client.id)}
+                  onClick={() => handleDeleteClick(client.id)}
                   className="flex-1 flex items-center justify-center py-2 px-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
                 >
                   <Trash2 className="w-4 h-4 ml-1" />
@@ -343,6 +397,19 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({
           </div>
         </form>
       </Modal>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        title="מחיקת לקוח"
+        message={`האם אתה בטוח שברצונך למחוק את ${confirmModal.clientName}?\n\nפעולה זו אינה ניתנת לביטול.`}
+        type="danger"
+        confirmText="מחק לקוח"
+        cancelText="ביטול"
+        isLoading={confirmModal.isDeleting}
+      />
     </div>
   );
 };

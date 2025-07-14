@@ -18,7 +18,9 @@ import {
 import { User } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { useTeamManagement } from '../../hooks/useTeamManagement';
+import { useTeamSalesSync } from '../../hooks/useTeamSalesSync';
 import { Modal } from '../UI/Modal';
+import { ConfirmModal } from '../UI/ConfirmModal';
 import { formatCurrency } from '../../utils/calculations';
 
 interface AgentManagementProps {
@@ -35,12 +37,21 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
     removeTeamMember,
     refreshData,
   } = useTeamManagement(user.id, user.teamId || '');
+  
+  // Initialize team sales sync for proper agent initialization
+  const { initializeTeamSales, cleanupDuplicates } = useTeamSalesSync(user.id, user.teamId || '');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [copiedCredentials, setCopiedCredentials] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    agentId: '',
+    agentName: '',
+    isDeleting: false
+  });
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -67,6 +78,9 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
         });
       } else {
         // Create new agent
+        console.log('🆕 Creating new agent with teamId:', user.teamId);
+        console.log('👤 Manager user data:', user);
+        
         await createUser({
           ...formData,
           role: 'agent',
@@ -83,8 +97,15 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
         password: '',
       });
       
-      // Refresh data
+      // Refresh data and initialize team sales
       await refreshData();
+      
+      // Small delay then cleanup and initialize (prevent race conditions)
+      setTimeout(async () => {
+        await cleanupDuplicates();
+        await initializeTeamSales();
+        console.log('✅ New agent setup completed');
+      }, 200);
     } catch (error) {
       console.error('Error saving agent:', error);
     }
@@ -101,15 +122,55 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (agentId: string) => {
-    if (window.confirm('האם אתה בטוח שברצונך להסיר את הסוכן מהצוות?')) {
-      try {
-        await removeTeamMember(agentId);
-        await refreshData();
-      } catch (error) {
-        console.error('Error removing agent:', error);
-      }
+  const handleDeleteClick = (agentId: string) => {
+    const agent = teamMembers.find(a => a.id === agentId);
+    const agentName = agent?.name || 'Unknown Agent';
+    
+    setConfirmModal({
+      isOpen: true,
+      agentId,
+      agentName,
+      isDeleting: false
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmModal.agentId) return;
+    
+    setConfirmModal(prev => ({ ...prev, isDeleting: true }));
+    
+    try {
+      console.log(`🗑️ Deleting agent: ${confirmModal.agentName} (${confirmModal.agentId})`);
+      await removeTeamMember(confirmModal.agentId);
+      
+      // Force refresh and cleanup to ensure all dashboards update
+      await refreshData();
+      await cleanupDuplicates();
+      
+      console.log('✅ Agent deletion and cleanup completed');
+      
+      // Close modal
+      setConfirmModal({
+        isOpen: false,
+        agentId: '',
+        agentName: '',
+        isDeleting: false
+      });
+    } catch (error) {
+      console.error('Error removing agent:', error);
+      setConfirmModal(prev => ({ ...prev, isDeleting: false }));
+      // You can replace this alert with a toast notification later
+      alert('שגיאה בהסרת הסוכן. אנא נסה שוב.');
     }
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmModal({
+      isOpen: false,
+      agentId: '',
+      agentName: '',
+      isDeleting: false
+    });
   };
 
   const copyCredentials = (email: string, password: string) => {
@@ -202,7 +263,7 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => handleDelete(agent.id)}
+                      onClick={() => handleDeleteClick(agent.id)}
                       className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -378,6 +439,19 @@ export const AgentManagement: React.FC<AgentManagementProps> = ({ user }) => {
           )}
         </form>
       </Modal>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        title="הסרת סוכן מהצוות"
+        message={`האם אתה בטוח שברצונך להסיר את ${confirmModal.agentName} מהצוות?\n\nפעולה זו תעביר את הלקוחות שלו אליך ותמחק את כל הנתונים שלו מהמערכת.`}
+        type="danger"
+        confirmText="הסר מהצוות"
+        cancelText="ביטול"
+        isLoading={confirmModal.isDeleting}
+      />
     </div>
   );
 }; 
